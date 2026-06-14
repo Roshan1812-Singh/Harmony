@@ -55,8 +55,14 @@ jobs:
       - name: Generate Prisma client
         run: pnpm --filter @harmony/api db:generate
 
-      - name: Apply migrations
-        run: pnpm --filter @harmony/api db:deploy
+      - name: Set up database schema
+        working-directory: apps/api
+        run: |
+          pnpm exec prisma db push --skip-generate
+          for f in prisma/sql/*.sql; do
+            echo "Applying $f"
+            pnpm exec prisma db execute --file "$f" --schema prisma/schema.prisma
+          done
 
       - name: Lint
         run: pnpm lint
