@@ -7,8 +7,7 @@
  *  – Throws a typed `ApiError` so React components can render rich problem detail.
  */
 import type { ApiError } from '@harmony/shared';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+import { API_URL } from './api-url';
 
 const CSRF_COOKIE = 'harmony.csrf';
 

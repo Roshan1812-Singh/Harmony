@@ -11,8 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useLogin } from '@/hooks/use-auth';
 import { HarmonyApiError } from '@/lib/api';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+import { API_URL } from '@/lib/api-url';
 
 export default function LoginPage() {
   const router = useRouter();

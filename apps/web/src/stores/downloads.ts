@@ -3,8 +3,7 @@
 import { create } from 'zustand';
 import type { PlayerTrack } from './player';
 import { idbAllIds, idbDeleteTrack, idbSaveTrack, type OfflineMeta } from '@/lib/offline-db';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1';
+import { API_URL } from '@/lib/api-url';
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
