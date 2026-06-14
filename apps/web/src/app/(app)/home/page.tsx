@@ -61,7 +61,7 @@ export default function HomePage() {
     <div className="flex flex-col gap-10 pb-10">
       <section>
         <h1 className="text-3xl font-bold">
-          {user ? `${greeting()}, ${user.displayName.split(' ')[0]}` : greeting()}
+          {user ? `${greeting()}, ${user.displayName?.split(' ')[0] ?? 'there'}` : greeting()}
         </h1>
         {!user && (
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">

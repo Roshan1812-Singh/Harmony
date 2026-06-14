@@ -79,6 +79,14 @@ export class AuthService implements OnModuleInit {
     return { user, tokens };
   }
 
+  // ── Current user profile ────────────────────────────────────────────────
+  /** Loads the full user record for `/auth/me` (the JWT only carries id/role). */
+  async getProfile(userId: string): Promise<User> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.deletedAt) throw new UnauthorizedException('User not found');
+    return user;
+  }
+
   // ── Email verification ──────────────────────────────────────────────────
   async sendEmailVerification(user: User): Promise<void> {
     const { token, tokenHash } = generateOpaqueToken();

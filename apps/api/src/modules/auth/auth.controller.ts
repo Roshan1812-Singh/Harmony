@@ -116,7 +116,8 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiCookieAuth()
   async me(@CurrentUser() user: AuthUser) {
-    return user;
+    const full = await this.auth.getProfile(user.id);
+    return publicUser(full);
   }
 
   // ── OAuth ──────────────────────────────────────────────────────────────
