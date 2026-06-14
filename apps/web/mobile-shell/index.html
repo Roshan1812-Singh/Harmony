@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Harmony</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0a0a0c;
+        color: #ffffff;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      .wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        gap: 16px;
+        text-align: center;
+        padding: 24px;
+      }
+      .dot {
+        width: 56px;
+        height: 56px;
+        border-radius: 9999px;
+        background: #1db954;
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(0.85);
+          opacity: 0.6;
+        }
+        50% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0;
+      }
+      p {
+        margin: 0;
+        color: #a1a1aa;
+        font-size: 14px;
+        max-width: 320px;
+      }
+      code {
+        color: #1db954;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="dot"></div>
+      <h1>Harmony</h1>
+      <p>
+        No server URL configured. Set <code>HARMONY_MOBILE_URL</code> to your deployed site and run
+        <code>cap:sync</code> before building the APK.
+      </p>
+    </div>
+  </body>
+</html>

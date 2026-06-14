@@ -1,0 +1,333 @@
+// Harmony — Prisma schema
+// See docs/DATABASE.md for the ER overview and column-by-column reference.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres", "relationJoins", "postgresqlExtensions"]
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+  extensions        = [citext, pg_trgm, btree_gin, pgcrypto, uuid_ossp(map: "uuid-ossp")]
+}
+
+// -------- Enums --------
+
+enum UserRole {
+  USER
+  ARTIST
+  ADMIN
+}
+
+enum License {
+  CC0
+  CC_BY
+  CC_BY_SA
+  CC_BY_NC
+  PUBLIC_DOMAIN
+  ROYALTY_FREE
+  ARTIST_OWNED
+}
+
+enum TrackStatus {
+  DRAFT
+  PROCESSING
+  READY
+  REJECTED
+  TAKEDOWN
+}
+
+enum AuditAction {
+  USER_BAN
+  USER_UNBAN
+  USER_ROLE_CHANGE
+  ARTIST_VERIFY
+  TRACK_APPROVE
+  TRACK_REJECT
+  TRACK_TAKEDOWN
+  TRACK_RESTORE
+}
+
+// -------- Core --------
+
+model User {
+  id              String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  email           String     @unique @db.Citext
+  passwordHash    String?
+  displayName     String
+  avatarUrl       String?
+  role            UserRole   @default(USER)
+  emailVerifiedAt DateTime?
+  oauthProviders  Json       @default("{}")
+  banned          Boolean    @default(false)
+  bannedReason    String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  artist          Artist?
+  playlists       Playlist[]
+  likes           Like[]
+  follows         Follow[]
+  recentlyPlayed  RecentlyPlayed[]
+  playbackSessions PlaybackSession[]
+  uploadedTracks  Track[]    @relation("UploaderTracks")
+  auditLogs       AuditLog[]
+
+  @@index([role])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model Artist {
+  id               String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId           String?  @unique @db.Uuid
+  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName      String
+  slug             String   @unique
+  bio              String?
+  coverUrl         String?
+  verified         Boolean  @default(false)
+  monthlyListeners Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  albums       Album[]
+  tracks       Track[]
+  trackCredits TrackArtist[]
+  followers    Follow[]
+
+  @@index([verified])
+  @@map("artists")
+}
+
+model Album {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  artistId    String    @db.Uuid
+  artist      Artist    @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  title       String
+  slug        String
+  coverUrl    String?
+  releaseDate DateTime? @db.Date
+  license     License
+  // External catalog identity. source = LOCAL for self-hosted albums; for imported
+  // catalogs (e.g. JioSaavn) externalId is the provider album id so a film
+  // soundtrack maps to ONE album shared across all its credited artists.
+  source      String    @default("LOCAL")
+  externalId  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  tracks Track[]
+
+  @@unique([artistId, slug])
+  @@unique([source, externalId])
+  @@index([releaseDate(sort: Desc)])
+  @@index([deletedAt])
+  @@map("albums")
+}
+
+model Genre {
+  id    String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name  String
+  slug  String       @unique
+  tracks TrackGenre[]
+
+  @@map("genres")
+}
+
+model Track {
+  id           String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  title        String
+  slug         String
+  albumId      String?     @db.Uuid
+  album        Album?      @relation(fields: [albumId], references: [id], onDelete: SetNull)
+  artistId     String      @db.Uuid
+  artist       Artist      @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  uploaderId   String      @db.Uuid
+  uploader     User        @relation("UploaderTracks", fields: [uploaderId], references: [id])
+  trackNumber  Int?
+  durationMs   Int         @default(0)
+  explicit     Boolean     @default(false)
+  license      License
+  status       TrackStatus @default(DRAFT)
+  sourceKey    String
+  streamKey    String?
+  coverUrl     String?
+  waveformJson Json?
+  playCount    BigInt      @default(0)
+  // External catalog (iTunes / Deezer / Jamendo). source = LOCAL for self-hosted tracks.
+  source       String      @default("LOCAL")
+  externalId   String?
+  audioUrl     String?
+  downloadable Boolean     @default(false)
+  isrc         String?
+  previewSec   Int?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
+
+  genres          TrackGenre[]
+  artists         TrackArtist[]
+  likes           Like[]
+  playlistItems   PlaylistTrack[]
+  recentlyPlayed  RecentlyPlayed[]
+  playbackSessions PlaybackSession[]
+
+  @@unique([source, externalId])
+  @@index([artistId])
+  @@index([albumId])
+  @@index([status])
+  @@index([source])
+  @@index([createdAt(sort: Desc)])
+  @@index([deletedAt])
+  @@map("tracks")
+}
+
+model TrackGenre {
+  trackId String @db.Uuid
+  genreId String @db.Uuid
+
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([trackId, genreId])
+  @@index([genreId])
+  @@map("track_genres")
+}
+
+model TrackArtist {
+  trackId  String @db.Uuid
+  artistId String @db.Uuid
+  position Int    @default(0)
+  role     String @default("primary")
+
+  track  Track  @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@id([trackId, artistId])
+  @@index([artistId])
+  @@map("track_artists")
+}
+
+model Playlist {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId          String   @db.Uuid
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  coverUrl        String?
+  isPublic        Boolean  @default(true)
+  isCollaborative Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  items PlaylistTrack[]
+
+  @@index([userId])
+  @@index([isPublic])
+  @@map("playlists")
+}
+
+model PlaylistTrack {
+  playlistId String   @db.Uuid
+  position   Int
+  trackId    String   @db.Uuid
+  addedById  String   @db.Uuid
+  addedAt    DateTime @default(now())
+
+  playlist Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@id([playlistId, position])
+  @@index([trackId])
+  @@map("playlist_tracks")
+}
+
+model Like {
+  userId    String   @db.Uuid
+  trackId   String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@id([userId, trackId])
+  @@index([trackId])
+  @@map("likes")
+}
+
+model Follow {
+  followerId String   @db.Uuid
+  artistId   String   @db.Uuid
+  createdAt  DateTime @default(now())
+
+  follower User   @relation(fields: [followerId], references: [id], onDelete: Cascade)
+  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, artistId])
+  @@index([artistId])
+  @@map("follows")
+}
+
+model RecentlyPlayed {
+  id       BigInt   @id @default(autoincrement())
+  userId   String   @db.Uuid
+  trackId  String   @db.Uuid
+  playedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([userId, playedAt(sort: Desc)])
+  @@map("recently_played")
+}
+
+model PlaybackSession {
+  id        String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId    String?   @db.Uuid
+  trackId   String    @db.Uuid
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  msPlayed  Int       @default(0)
+  client    String    @default("web")
+  ipHash    String?
+
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  track Track  @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([trackId, startedAt])
+  @@index([userId, startedAt])
+  @@map("playback_sessions")
+}
+
+model VerificationToken {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique
+  type      String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, type])
+  @@map("verification_tokens")
+}
+
+model AuditLog {
+  id         BigInt      @id @default(autoincrement())
+  actorId    String?     @db.Uuid
+  actor      User?       @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action     AuditAction
+  targetType String
+  targetId   String
+  payload    Json        @default("{}")
+  createdAt  DateTime    @default(now())
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}

@@ -1,0 +1,31 @@
+# A second deployment of the same image runs the transcoding worker.
+# Splitting from the HTTP API lets us scale CPU-heavy transcoding independently
+# from request handling, and keeps long-running ffmpeg jobs from competing with
+# HTTP latency budgets.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: harmony-transcoder
+  namespace: harmony
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: harmony-transcoder }
+  template:
+    metadata:
+      labels: { app: harmony-transcoder }
+    spec:
+      containers:
+        - name: transcoder
+          image: ghcr.io/harmony/api:latest
+          # Same image, but we override the entrypoint so it runs only as a worker.
+          # The current code wires the processor into the HTTP node by default — if you
+          # want pure worker pods, set DISABLE_HTTP=1 and gate `app.listen(...)` on it
+          # in main.ts. Kept verbatim here for completeness.
+          args: ["node", "dist/main.js"]
+          envFrom:
+            - configMapRef: { name: harmony-api-config }
+            - secretRef:    { name: harmony-api-secrets }
+          resources:
+            requests: { cpu: 500m, memory: 512Mi }
+            limits:   { cpu: 2000m, memory: 1Gi }

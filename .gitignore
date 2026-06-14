@@ -1,0 +1,42 @@
+# dependencies
+node_modules
+.pnpm-store
+
+# build
+dist
+build
+.next
+.turbo
+coverage
+*.tsbuildinfo
+
+# env
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+
+# os
+.DS_Store
+Thumbs.db
+
+# test artefacts
+playwright-report
+test-results
+
+# uploads (local dev)
+uploads
+tmp

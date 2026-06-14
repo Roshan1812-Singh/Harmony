@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: harmony-api-config
+  namespace: harmony
+data:
+  NODE_ENV: production
+  PORT: "4000"
+  API_GLOBAL_PREFIX: api/v1
+  LOG_LEVEL: info
+  WEB_ORIGIN: https://harmony.example
+  JWT_ISSUER: harmony
+  JWT_ACCESS_TTL: 15m
+  JWT_REFRESH_TTL: 30d
+  COOKIE_DOMAIN: .harmony.example
+  COOKIE_SECURE: "true"
+  S3_REGION: eu-west-1
+  S3_BUCKET_RAW: harmony-raw
+  S3_BUCKET_STREAM: harmony-stream
+  S3_BUCKET_PUBLIC_ART: harmony-public-art
+  S3_FORCE_PATH_STYLE: "false"
+  THROTTLE_TTL_MS: "60000"
+  THROTTLE_LIMIT: "120"

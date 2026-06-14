@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: harmony
+  namespace: harmony
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: 110m
+    nginx.ingress.kubernetes.io/limit-rps: "120"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["harmony.example", "api.harmony.example"]
+      secretName: harmony-tls
+  rules:
+    - host: harmony.example
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: harmony-web
+                port: { number: 80 }
+    - host: api.harmony.example
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: harmony-api
+                port: { number: 80 }

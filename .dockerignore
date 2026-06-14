@@ -1,0 +1,13 @@
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/coverage
+apps/web/android
+apps/web/ios
+**/*.log
+.git
+.github
+**/.env
+**/.env.*
+!**/.env.production.example
