@@ -29,7 +29,8 @@ function loadEnv() {
     const raw = readFileSync(join(process.cwd(), '.env'), 'utf8');
     for (const line of raw.split(/\r?\n/)) {
       const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
-      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+      const key = m?.[1];
+      if (key && !process.env[key]) process.env[key] = (m?.[2] ?? '').replace(/^["']|["']$/g, '');
     }
   } catch {
     /* ignore */
@@ -461,7 +462,9 @@ async function main() {
   // Pass 1 — search terms. Collects album ids referenced by every hit (and, when
   // not in discover-only mode, imports the search songs themselves).
   for (let i = 0; i < TERMS.length; i++) {
-    const { q, lang } = TERMS[i];
+    const term = TERMS[i];
+    if (!term) continue;
+    const { q, lang } = term;
     let n = 0;
     for (const page of PAGES) {
       n += await importTerm(uploaderId, q, lang, page, albumIds);
