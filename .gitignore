@@ -37,6 +37,8 @@ Thumbs.db
 playwright-report
 test-results
 
-# uploads (local dev)
-uploads
-tmp
+# uploads (local dev runtime dirs — NOT the source module under src/)
+/uploads/
+/apps/api/uploads/
+/tmp/
+tmp/
