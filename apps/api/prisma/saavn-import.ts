@@ -44,7 +44,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Throttle / resume knobs (all overridable via env). Defaults are deliberately
 // gentle so the running API stays responsive while the import works in the bg.
-const SEARCH_DELAY = Number(process.env.SAAVN_SEARCH_DELAY_MS) || 300;
+const SEARCH_DELAY = Number(process.env.SAAVN_SEARCH_DELAY_MS) || 700;
 const ALBUM_DELAY = Number(process.env.SAAVN_ALBUM_DELAY_MS) || 450;
 const ALBUM_REST_EVERY = Number(process.env.SAAVN_ALBUM_REST_EVERY) || 30;
 const ALBUM_REST_MS = Number(process.env.SAAVN_ALBUM_REST_MS) || 4000;
@@ -376,6 +376,58 @@ async function processSong(
   }
 }
 
+// Counts requests that failed even after retries, so a run that silently
+// imports nothing (e.g. when JioSaavn throttles a burst) is obvious in the log.
+let fetchFailures = 0;
+
+const FETCH_TIMEOUT_MS = Number(process.env.SAAVN_FETCH_TIMEOUT_MS) || 15000;
+
+// Fetches JioSaavn JSON with retry + exponential backoff and a hard per-request
+// timeout. JioSaavn throttles rapid bursts (429 / transient 5xx / dropped or
+// stalled connections); without this the importer used to swallow every failure
+// (importing 0 songs) or hang forever on a stalled socket.
+async function fetchSaavnJson<T>(url: string, label: string): Promise<T | null> {
+  const MAX_ATTEMPTS = 5;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    // Hard timeout: JioSaavn sometimes throttles by stalling the connection
+    // instead of returning 429. Without this the request hangs forever.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        signal: ctrl.signal,
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+          Accept: 'application/json',
+        },
+      });
+      if (res.status === 429 || res.status >= 500) {
+        const wait = 1500 * 2 ** (attempt - 1);
+        console.warn(`  ⚠ ${label}: HTTP ${res.status} (throttled) — retry in ${wait}ms [${attempt}/${MAX_ATTEMPTS}]`);
+        await sleep(wait);
+        continue;
+      }
+      if (!res.ok) {
+        console.warn(`  ⚠ ${label}: HTTP ${res.status} — skipping`);
+        fetchFailures++;
+        return null;
+      }
+      return (await res.json()) as T;
+    } catch (e) {
+      const wait = 1500 * 2 ** (attempt - 1);
+      const msg = ctrl.signal.aborted ? `timed out after ${FETCH_TIMEOUT_MS}ms` : (e as Error).message;
+      console.warn(`  ⚠ ${label}: ${msg} — retry in ${wait}ms [${attempt}/${MAX_ATTEMPTS}]`);
+      await sleep(wait);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  console.warn(`  ⚠ ${label}: gave up after ${MAX_ATTEMPTS} attempts`);
+  fetchFailures++;
+  return null;
+}
+
 async function importTerm(
   uploaderId: string,
   q: string,
@@ -386,15 +438,9 @@ async function importTerm(
   const url =
     `https://www.jiosaavn.com/api.php?__call=search.getResults&q=${encodeURIComponent(q)}` +
     `&_format=json&_marker=0&api_version=4&ctx=web6dot0&n=50&p=${page}`;
-  let songs: SaavnSong[] = [];
-  try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (!res.ok) return 0;
-    const json = (await res.json()) as { results?: SaavnSong[] };
-    songs = json.results ?? [];
-  } catch {
-    return 0;
-  }
+  const json = await fetchSaavnJson<{ results?: SaavnSong[] }>(url, `search "${q}" p${page}`);
+  if (!json) return 0;
+  const songs: SaavnSong[] = json.results ?? [];
 
   let added = 0;
   for (const s of songs) {
@@ -417,22 +463,15 @@ async function importAlbum(uploaderId: string, albumId: string): Promise<number>
   const url =
     `https://www.jiosaavn.com/api.php?__call=content.getAlbumDetails&albumid=${encodeURIComponent(albumId)}` +
     `&_format=json&_marker=0&api_version=4&ctx=web6dot0`;
-  let songs: SaavnSong[] = [];
-  let albumLang = '';
-  try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (!res.ok) return 0;
-    const json = (await res.json()) as {
-      songs?: SaavnSong[];
-      list?: SaavnSong[];
-      language?: string;
-      more_info?: { language?: string };
-    };
-    songs = json.songs ?? json.list ?? [];
-    albumLang = json.language ?? json.more_info?.language ?? '';
-  } catch {
-    return 0;
-  }
+  const json = await fetchSaavnJson<{
+    songs?: SaavnSong[];
+    list?: SaavnSong[];
+    language?: string;
+    more_info?: { language?: string };
+  }>(url, `album ${albumId}`);
+  if (!json) return 0;
+  const songs: SaavnSong[] = json.songs ?? json.list ?? [];
+  const albumLang = json.language ?? json.more_info?.language ?? '';
   const fallbackLang = albumLang ? titleCase(albumLang) : '';
   let added = 0;
   for (const s of songs) if (await processSong(uploaderId, s, fallbackLang)) added++;
@@ -454,29 +493,60 @@ async function main() {
   const done = loadIdSet('albums-done.json');
   let total = 0;
 
+  // Optional filters (override via env):
+  //   SAAVN_LANGS="Punjabi,Tamil,English"  → only import these languages
+  //   SAAVN_SKIP_EXPAND=1                   → skip the (huge) album-expansion pass
+  const onlyLangs = (process.env.SAAVN_LANGS ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const skipExpand = process.env.SAAVN_SKIP_EXPAND === '1';
+
   console.log(
     `▶ JioSaavn import — ${TERMS.length} terms × ${PAGES.length} pages` +
-      `${DISCOVER_ONLY ? ' (discover-only)' : ''}; resuming with ${albumIds.size} known albums, ${done.size} already expanded.`,
+      `${DISCOVER_ONLY ? ' (discover-only)' : ''}` +
+      `${onlyLangs.length ? ` [langs: ${onlyLangs.join(', ')}]` : ''}` +
+      `; resuming with ${albumIds.size} known albums, ${done.size} already expanded.`,
   );
 
   // Pass 1 — search terms. Collects album ids referenced by every hit (and, when
   // not in discover-only mode, imports the search songs themselves).
+  const selected = TERMS.filter(
+    (t): t is { q: string; lang: string } =>
+      !!t && (!onlyLangs.length || onlyLangs.includes(t.lang.toLowerCase())),
+  );
+  console.log(`  → ${selected.length} term(s) match the language filter.`);
+  let processed = 0;
   for (let i = 0; i < TERMS.length; i++) {
     const term = TERMS[i];
     if (!term) continue;
     const { q, lang } = term;
+    if (onlyLangs.length && !onlyLangs.includes(lang.toLowerCase())) continue;
     let n = 0;
     for (const page of PAGES) {
       n += await importTerm(uploaderId, q, lang, page, albumIds);
       await sleep(SEARCH_DELAY);
     }
     total += n;
-    if ((i + 1) % 10 === 0 || i === TERMS.length - 1) {
-      saveIdSet('albums.json', albumIds);
-      console.log(`  [${i + 1}/${TERMS.length}] ${q} (${lang}) → +${n} (albums known ${albumIds.size})`);
-    }
+    processed++;
+    // Log EVERY processed term so a run is never silent (writes to the remote DB
+    // are slow, so one term can take a while — visible progress matters).
+    console.log(
+      `  [${processed}/${selected.length}] ${q} (${lang}) → +${n}  ` +
+        `(albums known ${albumIds.size}, total +${total})`,
+    );
+    if (processed % 10 === 0) saveIdSet('albums.json', albumIds);
   }
   saveIdSet('albums.json', albumIds);
+
+  if (skipExpand) {
+    const count = await prisma.track.count({ where: { source: 'SAAVN' } });
+    console.log(
+      `✅ Pass 1 complete (album expansion skipped). SAAVN tracks in DB: ${count}` +
+        (fetchFailures ? ` — ⚠ ${fetchFailures} request(s) failed (likely throttled)` : ''),
+    );
+    return;
+  }
 
   // Pass 2 — expand every not-yet-done album to its complete tracklist, throttled
   // with periodic rests so the live API stays responsive. Progress is persisted

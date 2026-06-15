@@ -60,7 +60,7 @@ export default function HomePage() {
   return (
     <div className="flex flex-col gap-10 pb-10">
       <section>
-        <h1 className="text-3xl font-bold">
+        <h1 className="text-3xl font-bold" suppressHydrationWarning>
           {user ? `${greeting()}, ${user.displayName?.split(' ')[0] ?? 'there'}` : greeting()}
         </h1>
         {!user && (

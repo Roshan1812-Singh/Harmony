@@ -1,0 +1,65 @@
+name: Import songs
+
+# Manually triggered catalog importer. Runs the JioSaavn import in the cloud
+# (close to GitHub's runners) so you don't have to tie up your own machine.
+# Trigger it from the GitHub UI:  Actions → "Import songs" → Run workflow.
+#
+# Requires one repository secret:
+#   IMPORT_DATABASE_URL  → your Neon connection string (same as Render's DATABASE_URL)
+
+on:
+  workflow_dispatch:
+    inputs:
+      langs:
+        description: 'Comma-separated languages to import (leave blank for ALL terms, incl. Hindi)'
+        required: false
+        default: 'Punjabi,Tamil,Telugu,English,Korean,Bengali,Marathi,Kannada,Malayalam,Urdu,Spanish,Japanese,Arabic,Bhojpuri,Gujarati'
+      skip_expand:
+        description: 'Skip the heavy album-expansion pass (recommended: true)'
+        required: false
+        default: 'true'
+      search_delay_ms:
+        description: 'Delay between page requests in ms (raise if throttled)'
+        required: false
+        default: '700'
+
+concurrency:
+  group: import-songs
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      DATABASE_URL: ${{ secrets.IMPORT_DATABASE_URL }}
+      SAAVN_LANGS: ${{ inputs.langs }}
+      SAAVN_SKIP_EXPAND: ${{ inputs.skip_expand == 'true' && '1' || '0' }}
+      SAAVN_SEARCH_DELAY_MS: ${{ inputs.search_delay_ms }}
+
+    steps:
+      - name: Guard — secret must be set
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Repository secret IMPORT_DATABASE_URL is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @harmony/api db:generate
+
+      - name: Run importer
+        working-directory: apps/api
+        run: pnpm saavn:import
