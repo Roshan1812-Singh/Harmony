@@ -217,20 +217,39 @@ async function getSystemUploaderId(): Promise<string> {
   return u.id;
 }
 
-const artistCache = new Map<string, string>();
-const albumCache = new Map<string, string>();
-const genreCache = new Map<string, string>();
+// Caches store the in-flight promise (not just the resolved id) so that when many
+// songs in a page are imported concurrently, simultaneous lookups for the same
+// artist/album/genre share ONE upsert instead of racing into a unique-constraint
+// conflict. A rejected promise is evicted so the next caller can retry.
+const artistCache = new Map<string, Promise<string>>();
+const albumCache = new Map<string, Promise<string>>();
+const genreCache = new Map<string, Promise<string>>();
 
-async function upsertArtist(name: string): Promise<string> {
-  const slug = slugify(name);
-  if (artistCache.has(slug)) return artistCache.get(slug)!;
-  const a = await prisma.artist.upsert({
-    where: { slug },
-    update: {},
-    create: { displayName: name, slug, verified: true },
+function cached(
+  cache: Map<string, Promise<string>>,
+  key: string,
+  run: () => Promise<string>,
+): Promise<string> {
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const p = run().catch((e) => {
+    cache.delete(key);
+    throw e;
   });
-  artistCache.set(slug, a.id);
-  return a.id;
+  cache.set(key, p);
+  return p;
+}
+
+function upsertArtist(name: string): Promise<string> {
+  const slug = slugify(name);
+  return cached(artistCache, slug, async () => {
+    const a = await prisma.artist.upsert({
+      where: { slug },
+      update: {},
+      create: { displayName: name, slug, verified: true },
+    });
+    return a.id;
+  });
 }
 
 // JioSaavn sometimes returns a single "primary artist" entry that actually packs
@@ -268,30 +287,30 @@ async function upsertAlbum(
   title: string,
   coverUrl: string | null,
 ): Promise<string> {
-  if (albumCache.has(externalId)) return albumCache.get(externalId)!;
-  const al = await prisma.album.upsert({
-    where: { source_externalId: { source: 'SAAVN', externalId } },
-    update: { coverUrl: coverUrl ?? undefined, title },
-    create: {
-      artistId: ownerArtistId,
-      title,
-      slug: slugify(title),
-      coverUrl,
-      license: LICENSE,
-      source: 'SAAVN',
-      externalId,
-    },
+  return cached(albumCache, externalId, async () => {
+    const al = await prisma.album.upsert({
+      where: { source_externalId: { source: 'SAAVN', externalId } },
+      update: { coverUrl: coverUrl ?? undefined, title },
+      create: {
+        artistId: ownerArtistId,
+        title,
+        slug: slugify(title),
+        coverUrl,
+        license: LICENSE,
+        source: 'SAAVN',
+        externalId,
+      },
+    });
+    return al.id;
   });
-  albumCache.set(externalId, al.id);
-  return al.id;
 }
 
-async function upsertGenre(name: string): Promise<string> {
+function upsertGenre(name: string): Promise<string> {
   const slug = slugify(name);
-  if (genreCache.has(slug)) return genreCache.get(slug)!;
-  const g = await prisma.genre.upsert({ where: { slug }, update: {}, create: { name, slug } });
-  genreCache.set(slug, g.id);
-  return g.id;
+  return cached(genreCache, slug, async () => {
+    const g = await prisma.genre.upsert({ where: { slug }, update: {}, create: { name, slug } });
+    return g.id;
+  });
 }
 
 // Imports a single JioSaavn song object. Returns true if it was newly added or
@@ -428,6 +447,28 @@ async function fetchSaavnJson<T>(url: string, label: string): Promise<T | null> 
   return null;
 }
 
+// How many songs to write concurrently. Writes to a remote DB are latency-bound,
+// so processing a page's songs in parallel is dramatically faster than one-by-one.
+const CONCURRENCY = Number(process.env.SAAVN_CONCURRENCY) || 8;
+
+// Runs `fn` over `items` with at most `limit` in flight; returns how many were true.
+async function mapPool<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<boolean>,
+): Promise<number> {
+  let added = 0;
+  let idx = 0;
+  const worker = async () => {
+    while (idx < items.length) {
+      const item = items[idx++]!;
+      if (await fn(item)) added++;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return added;
+}
+
 async function importTerm(
   uploaderId: string,
   q: string,
@@ -442,15 +483,14 @@ async function importTerm(
   if (!json) return 0;
   const songs: SaavnSong[] = json.results ?? [];
 
-  let added = 0;
   for (const s of songs) {
     const aid = s.more_info?.album_id;
     if (aid) albumIds.add(aid);
-    // In discover-only mode we skip the (already-done) song writes and just
-    // collect album ids to feed the album-expansion pass.
-    if (!DISCOVER_ONLY && (await processSong(uploaderId, s, termLang))) added++;
   }
-  return added;
+  // In discover-only mode we skip the (already-done) song writes and just
+  // collect album ids to feed the album-expansion pass.
+  if (DISCOVER_ONLY) return 0;
+  return mapPool(songs, CONCURRENCY, (s) => processSong(uploaderId, s, termLang));
 }
 
 const albumDone = new Set<string>();
