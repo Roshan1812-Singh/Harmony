@@ -28,7 +28,25 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit(): Promise<void> {
-    await this.$connect();
+    // Managed Postgres (Neon free tier) can be briefly unreachable while it wakes
+    // from suspend. Retry a few times, and if it still fails, continue rather than
+    // crash the whole process — Prisma will connect lazily on the first query.
+    const attempts = 5;
+    for (let i = 1; i <= attempts; i++) {
+      try {
+        await this.$connect();
+        return;
+      } catch (err) {
+        this.logger.warn(
+          `DB connect attempt ${i}/${attempts} failed: ${(err as Error).message}`,
+        );
+        if (i === attempts) {
+          this.logger.error('Could not connect to the database on boot; continuing with lazy connect.');
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
