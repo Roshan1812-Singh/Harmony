@@ -1,8 +1,23 @@
 import type { NextConfig } from 'next';
 
+/**
+ * Backend API base (origin + /api/v1), derived from NEXT_PUBLIC_API_URL.
+ * Used as the proxy target so the browser/WebView can call the API on the SAME
+ * origin (first-party cookies), which is required for auth inside the Android
+ * APK's WebView (third-party cookies are blocked there).
+ */
+const backendApi = (() => {
+  const raw = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001/api/v1').trim().replace(/\/+$/, '');
+  return /\/api\/v\d+$/.test(raw) ? raw : `${raw}/api/v1`;
+})();
+
 const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  async rewrites() {
+    // Same-origin API proxy: /api/v1/* on this domain → the real backend.
+    return [{ source: '/api/v1/:path*', destination: `${backendApi}/:path*` }];
+  },
   // `output: 'standalone'` is only needed for container deploys and requires
   // symlink permissions that Windows + OneDrive deny (EPERM). `next start`
   // runs from the regular `.next` build without it.

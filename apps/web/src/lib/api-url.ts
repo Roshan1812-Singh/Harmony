@@ -7,6 +7,13 @@
  * to a missing prefix.
  */
 function resolveApiUrl(): string {
+  // In the browser (incl. the Android WebView/APK), always call the API on the
+  // SAME origin. A Next.js rewrite (see next.config.ts) proxies these to the real
+  // backend, which makes the auth cookies first-party so login works in the APK.
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/api/v1`;
+  }
+  // Server/build only: fall back to the configured absolute backend URL.
   const raw = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
   let base = raw || 'http://localhost:4001/api/v1';
   base = base.replace(/\/+$/, '');
