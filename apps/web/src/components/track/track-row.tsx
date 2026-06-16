@@ -87,7 +87,7 @@ export function TrackRow({
       }}
       onDoubleClick={() => setQueue(context, index)}
       className={cn(
-        'group grid grid-cols-[2rem_1fr_1fr_2.5rem_3rem_2rem] items-center gap-3 px-3 py-2 rounded hover:bg-white/5',
+        'group grid grid-cols-[1.5rem_minmax(0,1fr)_auto_2rem] md:grid-cols-[2rem_1fr_1fr_2.5rem_3rem_2rem] items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 rounded hover:bg-white/5',
         isCurrent && 'bg-white/5',
       )}
     >
@@ -108,7 +108,10 @@ export function TrackRow({
         )}
       </button>
 
-      <div className="flex items-center gap-3 min-w-0">
+      <div
+        onClick={() => setQueue(context, index)}
+        className="flex items-center gap-3 min-w-0 cursor-pointer"
+      >
         {track.coverUrl && (
           <div className="relative size-10 shrink-0 rounded bg-[var(--color-surface-2)] overflow-hidden">
             <Image src={track.coverUrl} alt="" fill sizes="40px" className="object-cover" unoptimized />
@@ -139,14 +142,14 @@ export function TrackRow({
         aria-label={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
         onClick={toggleLike}
         className={cn(
-          'opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)] hover:text-white',
+          'hidden md:block opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)] hover:text-white',
           isLiked && 'opacity-100 text-[var(--color-accent)]',
         )}
       >
         <Heart size={16} fill={isLiked ? 'currentColor' : 'none'} />
       </button>
 
-      <span className="text-sm text-[var(--color-text-muted)] tabular-nums">{formatDuration(track.durationMs)}</span>
+      <span className="text-right text-xs sm:text-sm text-[var(--color-text-muted)] tabular-nums">{formatDuration(track.durationMs)}</span>
 
       <TrackMenu
         track={track}
@@ -158,7 +161,7 @@ export function TrackRow({
       >
         <button
           aria-label="More options"
-          className="grid place-items-center text-[var(--color-text-muted)] opacity-0 group-hover:opacity-100 hover:text-white data-[state=open]:opacity-100"
+          className="grid place-items-center text-[var(--color-text-muted)] opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:text-white data-[state=open]:opacity-100"
         >
           <MoreHorizontal size={18} />
         </button>

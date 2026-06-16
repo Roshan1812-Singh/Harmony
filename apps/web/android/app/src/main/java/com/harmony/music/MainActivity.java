@@ -23,4 +23,19 @@ public class MainActivity extends BridgeActivity {
             cookieManager.setAcceptThirdPartyCookies(webView, true);
         }
     }
+
+    // Persist cookies to disk whenever the app is backgrounded. Without an explicit
+    // flush, Android's WebView may not write the auth cookies before the process is
+    // killed, which logged the user out on every relaunch.
+    @Override
+    public void onPause() {
+        super.onPause();
+        CookieManager.getInstance().flush();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        CookieManager.getInstance().flush();
+    }
 }

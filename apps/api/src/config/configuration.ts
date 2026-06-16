@@ -101,7 +101,10 @@ export const configuration = (): AppConfig => ({
     accessPrivateKey: process.env.JWT_ACCESS_PRIVATE_KEY ?? '',
     accessPublicKey: process.env.JWT_ACCESS_PUBLIC_KEY ?? '',
     accessTtl: process.env.JWT_ACCESS_TTL ?? '15m',
-    refreshTtl: process.env.JWT_REFRESH_TTL ?? '30d',
+    // Long-lived refresh token so a logged-in user stays signed in for ~90 days
+    // (until they explicitly log out). The access token stays short; the client
+    // silently refreshes it using this cookie.
+    refreshTtl: process.env.JWT_REFRESH_TTL ?? '90d',
     issuer: process.env.JWT_ISSUER ?? 'harmony',
   },
 

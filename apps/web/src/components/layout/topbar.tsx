@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, LogOut, Music2, User, Shield } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LogOut, Music2, User, Shield, Search, Library } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +42,21 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Mobile-only quick nav — the sidebar (which holds Search/Library) is hidden on phones. */}
+        <Link
+          href="/search"
+          aria-label="Search"
+          className="md:hidden grid size-8 place-items-center rounded-full text-white hover:bg-white/10"
+        >
+          <Search size={20} />
+        </Link>
+        <Link
+          href="/library"
+          aria-label="Your Library"
+          className="md:hidden grid size-8 place-items-center rounded-full text-white hover:bg-white/10"
+        >
+          <Library size={20} />
+        </Link>
         {!user ? (
           <>
             <Button variant="ghost" size="sm" asChild>

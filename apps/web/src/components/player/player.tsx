@@ -95,6 +95,19 @@ export function Player() {
       return;
     }
     setAudioDurationMs(0);
+    // A new track is starting: immediately stop the previous source so its lingering
+    // `timeupdate` events can't write a stale position (which made the next song begin
+    // where the last one left off, and could instantly re-fire `ended`).
+    const a = audioRef.current;
+    if (a) {
+      a.pause();
+      try {
+        a.currentTime = 0;
+      } catch {
+        /* not yet seekable */
+      }
+    }
+    setPosition(0);
     let cancelled = false;
     const supportsMSE = typeof window !== 'undefined' && Hls.isSupported();
     const supportsNativeHls =
@@ -149,7 +162,7 @@ export function Player() {
     return () => {
       cancelled = true;
     };
-  }, [track]);
+  }, [track, setPosition]);
 
   // Attach source.
   useEffect(() => {
@@ -167,7 +180,9 @@ export function Player() {
     } else {
       audio.src = manifestUrl;
     }
-    audio.currentTime = positionMs / 1000;
+    // Every manifest (re)attach corresponds to a freshly-selected track, so always
+    // start from the beginning. Seeks are applied separately via the seek-request effect.
+    audio.currentTime = 0;
     if (isPlaying) audio.play().catch(() => undefined);
     return () => {
       hlsRef.current?.destroy();
