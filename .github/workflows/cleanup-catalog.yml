@@ -1,0 +1,60 @@
+name: Cleanup catalog
+
+# Manually triggered catalog cleanup. Removes low-quality instrumental cover
+# compilations (anime PianoBox / Music Box / orchestral cover series) that reuse one
+# album image across many tracks. Runs against the SAME production database as the
+# importer (the IMPORT_DATABASE_URL secret = Render's DATABASE_URL).
+#
+# Trigger from the GitHub UI:  Actions → "Cleanup catalog" → Run workflow.
+#   - Leave apply = false (default) for a safe DRY RUN that only prints what it would delete.
+#   - Set apply = true to actually delete.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Set to true to DELETE. false = dry run (just prints).'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: cleanup-catalog
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.IMPORT_DATABASE_URL }}
+    steps:
+      - name: Guard — secret must be set
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Repository secret IMPORT_DATABASE_URL is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @harmony/api db:generate
+
+      - name: Run cleanup
+        working-directory: apps/api
+        run: |
+          if [ "${{ inputs.apply }}" = "true" ]; then
+            pnpm --filter @harmony/api exec tsx prisma/cleanup-dupes.ts --apply
+          else
+            pnpm --filter @harmony/api exec tsx prisma/cleanup-dupes.ts
+          fi
