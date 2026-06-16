@@ -55,7 +55,20 @@ export async function api<T = unknown>(path: string, opts: FetchOptions = {}): P
           : JSON.stringify(opts.body),
   });
 
-  if (res.status === 401 && opts.retryOn401 !== false && !path.startsWith('/auth/')) {
+  // On 401 we attempt a one-shot refresh and retry. We must NOT do this for the
+  // refresh endpoint itself or the auth mutations (login/register/logout/etc.),
+  // since a 401 there is expected — but `/auth/me` MUST be allowed to refresh so a
+  // valid (30-day) refresh token re-mints an expired (15-min) access token. Without
+  // this, reopening the app after the access token expired looked like a full logout.
+  const skipRefresh =
+    path.startsWith('/auth/refresh') ||
+    path.startsWith('/auth/login') ||
+    path.startsWith('/auth/register') ||
+    path.startsWith('/auth/logout') ||
+    path.startsWith('/auth/forgot-password') ||
+    path.startsWith('/auth/reset-password') ||
+    path.startsWith('/auth/verify-email');
+  if (res.status === 401 && opts.retryOn401 !== false && !skipRefresh) {
     const refreshed = await refresh();
     if (refreshed) {
       return api<T>(path, { ...opts, retryOn401: false });
