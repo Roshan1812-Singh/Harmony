@@ -58,14 +58,14 @@ export default function NowPlayingPage() {
   const upNext = queue.slice(index + 1, index + 1 + 30);
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <div className="flex flex-col items-center gap-6">
-        <div className="relative aspect-square w-full max-w-md overflow-hidden rounded-xl bg-[var(--color-surface-2)] shadow-2xl">
-          {track.coverUrl && <Image src={track.coverUrl} alt="" fill sizes="448px" className="object-cover" unoptimized priority />}
+    <div className="mx-auto flex w-full min-w-0 max-w-5xl flex-col gap-8 overflow-x-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-10">
+      <div className="flex min-w-0 flex-col items-center gap-6">
+        <div className="relative aspect-square w-full max-w-[18rem] overflow-hidden rounded-xl bg-[var(--color-surface-2)] shadow-2xl sm:max-w-md">
+          {track.coverUrl && <Image src={track.coverUrl} alt="" fill sizes="(max-width: 640px) 80vw, 448px" className="object-cover" unoptimized priority />}
         </div>
 
-        <div className="w-full max-w-md text-center">
-          <h1 className="truncate text-3xl font-bold">{track.title}</h1>
+        <div className="w-full min-w-0 max-w-md text-center">
+          <h1 className="truncate text-2xl font-bold sm:text-3xl">{track.title}</h1>
           {track.artistSlug ? (
             <Link href={`/artist/${track.artistSlug}`} className="text-[var(--color-text-muted)] hover:underline">
               {track.artistName}
@@ -75,8 +75,8 @@ export default function NowPlayingPage() {
           )}
         </div>
 
-        <div className="flex w-full max-w-md items-center gap-3">
-          <span className="w-10 text-right text-xs tabular-nums text-[var(--color-text-muted)]">{formatDuration(positionMs)}</span>
+        <div className="flex w-full min-w-0 max-w-md items-center gap-3">
+          <span className="w-10 shrink-0 text-right text-xs tabular-nums text-[var(--color-text-muted)]">{formatDuration(positionMs)}</span>
           <Slider.Root
             min={0}
             max={Math.max(duration, 1)}
@@ -90,7 +90,7 @@ export default function NowPlayingPage() {
             </Slider.Track>
             <Slider.Thumb className="block size-3 rounded-full bg-white shadow" />
           </Slider.Root>
-          <span className="w-10 text-xs tabular-nums text-[var(--color-text-muted)]">{formatDuration(duration)}</span>
+          <span className="w-10 shrink-0 text-xs tabular-nums text-[var(--color-text-muted)]">{formatDuration(duration)}</span>
         </div>
 
         <div className="flex items-center gap-5">
@@ -136,11 +136,11 @@ export default function NowPlayingPage() {
         )}
       </div>
 
-      <div className="flex flex-col gap-8">
-        <section>
+      <div className="flex min-w-0 flex-col gap-8">
+        <section className="min-w-0">
           <h2 className="mb-3 text-lg font-bold">Lyrics</h2>
           {lyricsData?.lyrics ? (
-            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-[var(--color-text-muted)]">{lyricsData.lyrics}</pre>
+            <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-[var(--color-text-muted)]">{lyricsData.lyrics}</pre>
           ) : (
             <p className="text-sm text-[var(--color-text-muted)]">Lyrics not available for this track.</p>
           )}
