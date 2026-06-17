@@ -1,21 +1,18 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, HarmonyApiError } from '@/lib/api';
+import { api } from '@/lib/api';
 import type { PublicUser } from '@harmony/shared';
 
+// Authentication has been removed — Harmony is now a free, account-less music
+// player. `useCurrentUser` is kept (callers still import it) but resolves to a
+// null user without ever hitting the network, so no `/auth/me` requests fire.
 export function useCurrentUser() {
   return useQuery<PublicUser | null>({
     queryKey: ['auth', 'me'],
-    queryFn: async () => {
-      try {
-        return await api<PublicUser>('/auth/me');
-      } catch (err) {
-        if (err instanceof HarmonyApiError && err.status === 401) return null;
-        throw err;
-      }
-    },
-    staleTime: 60_000,
+    queryFn: async () => null,
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 }
 

@@ -1,11 +1,11 @@
 'use client';
 
-import Link from 'next/link';
+import { useEffect } from 'react';
 import type { Route } from 'next';
 import { Play } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { useCurrentUser } from '@/hooks/use-auth';
+import { loadCache, saveCache } from '@/lib/catalog-cache';
 import { playTracks, type PlayableLike } from '@/lib/play';
 import { Section, CardGrid, MediaCard, GenreTile } from '@/components/media/cards';
 
@@ -35,42 +35,39 @@ function greeting(): string {
 }
 
 export default function HomePage() {
-  const { data: user } = useCurrentUser();
-
   const { data: trending } = useQuery({
     queryKey: ['tracks', 'trending'],
     queryFn: () => api<TrackList>('/tracks/trending?limit=30'),
+    // Render last-seen songs instantly from disk, then refetch in the background.
+    initialData: () => loadCache<TrackList>('trending'),
+    initialDataUpdatedAt: 0,
   });
 
   const { data: genres } = useQuery({
     queryKey: ['genres'],
     queryFn: () => api<Genre[]>('/genres'),
+    initialData: () => loadCache<Genre[]>('genres'),
+    initialDataUpdatedAt: 0,
   });
 
-  const { data: recent } = useQuery({
-    enabled: !!user,
-    queryKey: ['library', 'recent'],
-    queryFn: () => api<ApiTrack[]>('/library/recently-played?limit=12'),
-  });
+  useEffect(() => {
+    if (trending) saveCache('trending', trending);
+  }, [trending]);
+  useEffect(() => {
+    if (genres) saveCache('genres', genres);
+  }, [genres]);
 
   const tracks = trending?.data ?? [];
   const shortcuts = tracks.slice(0, 8);
   const trendingCards = tracks.slice(0, 18);
+  const loading = !trending;
 
   return (
     <div className="flex flex-col gap-10 pb-10">
       <section>
         <h1 className="text-3xl font-bold" suppressHydrationWarning>
-          {user ? `${greeting()}, ${user.displayName?.split(' ')[0] ?? 'there'}` : greeting()}
+          {greeting()}
         </h1>
-        {!user && (
-          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-            <Link href="/auth/register" className="text-[var(--color-accent)] hover:underline">
-              Create a free account
-            </Link>{' '}
-            to save favorites, build playlists, and follow artists.
-          </p>
-        )}
       </section>
 
       {/* Quick-pick shortcut grid */}
@@ -97,20 +94,17 @@ export default function HomePage() {
         </div>
       )}
 
-      {user && recent && recent.length > 0 && (
-        <Section title="Jump back in">
-          <CardGrid>
-            {recent.map((t, i) => (
-              <MediaCard
-                key={`${t.id}-${i}`}
-                coverUrl={t.coverUrl}
-                title={t.title}
-                subtitle={t.artist?.displayName}
-                onPlay={() => playTracks(recent, i)}
-              />
-            ))}
-          </CardGrid>
-        </Section>
+      {/* First-ever load (no cache yet): show lightweight skeletons so the screen
+          never looks empty while the backend wakes up. */}
+      {loading && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 rounded-md bg-white/5">
+              <div className="size-16 shrink-0 animate-pulse bg-[var(--color-surface-2)]" />
+              <div className="h-4 w-32 animate-pulse rounded bg-[var(--color-surface-2)]" />
+            </div>
+          ))}
+        </div>
       )}
 
       {trendingCards.length > 0 && (

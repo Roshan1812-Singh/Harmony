@@ -2,21 +2,10 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, LogOut, Music2, User, Shield, Search, Library } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
-import { useCurrentUser, useLogout } from '@/hooks/use-auth';
+import { ChevronLeft, ChevronRight, Music2, Search, Download } from 'lucide-react';
 
 export function TopBar() {
   const router = useRouter();
-  const { data: user } = useCurrentUser();
-  const logout = useLogout();
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between gap-3 bg-gradient-to-b from-black/80 to-black/20 backdrop-blur px-4 sm:px-6 py-3">
@@ -42,7 +31,7 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Mobile-only quick nav — the sidebar (which holds Search/Library) is hidden on phones. */}
+        {/* Mobile-only quick nav — the sidebar (which holds Search/Downloads) is hidden on phones. */}
         <Link
           href="/search"
           aria-label="Search"
@@ -51,54 +40,12 @@ export function TopBar() {
           <Search size={20} />
         </Link>
         <Link
-          href="/library"
-          aria-label="Your Library"
+          href="/library/downloads"
+          aria-label="Downloads"
           className="md:hidden grid size-8 place-items-center rounded-full text-white hover:bg-white/10"
         >
-          <Library size={20} />
+          <Download size={20} />
         </Link>
-        {!user ? (
-          <>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/auth/register">Sign up</Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link href="/auth/login">Log in</Link>
-            </Button>
-          </>
-        ) : (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="secondary" size="sm" className="px-3">
-                <span className="size-7 grid place-items-center rounded-full bg-[var(--color-accent)] text-[var(--color-accent-fg)] font-bold text-xs">
-                  {user.displayName?.[0]?.toUpperCase()}
-                </span>
-                <span className="hidden sm:inline">{user.displayName}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <Link href="/profile" className="flex items-center gap-2">
-                  <User size={14} /> Profile
-                </Link>
-              </DropdownMenuItem>
-              {user.role === 'ADMIN' && (
-                <DropdownMenuItem asChild>
-                  <Link href="/admin" className="flex items-center gap-2">
-                    <Shield size={14} /> Admin
-                  </Link>
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => logout.mutate(undefined, { onSuccess: () => router.push('/') })}
-                className="flex items-center gap-2 text-[var(--color-danger)]"
-              >
-                <LogOut size={14} /> Log out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
       </div>
     </header>
   );

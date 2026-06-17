@@ -11,7 +11,7 @@ export function Providers({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 30_000,
+            staleTime: 5 * 60_000,
             refetchOnWindowFocus: false,
             retry: (failureCount, error: unknown) => {
               if (typeof error === 'object' && error && 'status' in error) {

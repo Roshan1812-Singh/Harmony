@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Play, MoreHorizontal, Heart, Volume2 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { Play, MoreHorizontal, Volume2 } from 'lucide-react';
 import { cn, formatDuration, formatPlayCount } from '@/lib/utils';
 import { usePlayer, type PlayerTrack } from '@/stores/player';
 import { TrackMenu } from './track-menu';
@@ -69,16 +68,6 @@ export function TrackRow({
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => setIsLiked(!!liked), [liked]);
 
-  async function toggleLike() {
-    const next = !isLiked;
-    setIsLiked(next);
-    try {
-      await api(`/tracks/${track.id}/like`, { method: next ? 'POST' : 'DELETE' });
-    } catch {
-      setIsLiked(!next);
-    }
-  }
-
   return (
     <div
       onContextMenu={(e) => {
@@ -87,7 +76,7 @@ export function TrackRow({
       }}
       onDoubleClick={() => setQueue(context, index)}
       className={cn(
-        'group grid grid-cols-[1.5rem_minmax(0,1fr)_auto_2rem] md:grid-cols-[2rem_1fr_1fr_2.5rem_3rem_2rem] items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 rounded hover:bg-white/5',
+        'group grid grid-cols-[1.5rem_minmax(0,1fr)_auto_2rem] md:grid-cols-[2rem_1fr_1fr_3rem_2rem] items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 rounded hover:bg-white/5',
         isCurrent && 'bg-white/5',
       )}
     >
@@ -137,17 +126,6 @@ export function TrackRow({
       ) : (
         <span className="hidden md:block" />
       )}
-
-      <button
-        aria-label={isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
-        onClick={toggleLike}
-        className={cn(
-          'hidden md:block opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)] hover:text-white',
-          isLiked && 'opacity-100 text-[var(--color-accent)]',
-        )}
-      >
-        <Heart size={16} fill={isLiked ? 'currentColor' : 'none'} />
-      </button>
 
       <span className="text-right text-xs sm:text-sm text-[var(--color-text-muted)] tabular-nums">{formatDuration(track.durationMs)}</span>
 
